@@ -10,6 +10,11 @@
 #include <iomanip>
 
 
+
+/* 提取规定时间段内的上市的新股的信息包括：
+代码  名称  发行价  涨停价  上市日期  涨停日期
+*/
+
 BOOL APIENTRY DllMain( HANDLE hModule, 
                        DWORD  ul_reason_for_call, 
                        LPVOID lpReserved
@@ -215,7 +220,7 @@ bool pickUpInfo(char * Code, short nSetCode, short DataType, NTime time1, NTime 
 {
 	//窥视数据个数
 	long datanum = g_pFuncCallBack(Code, nSetCode, DataType, NULL, -1, time1, time2, nTQ, 0);
-	if ( 1 >= datanum )
+	if ( 1 > datanum )
 	{
 		std::ostringstream ss;
 		ss << "datanum = " << datanum << " ";
@@ -227,7 +232,7 @@ bool pickUpInfo(char * Code, short nSetCode, short DataType, NTime time1, NTime 
 	memset(pHisDat, 0, datanum*sizeof(HISDAT));
 
 	long readnum = g_pFuncCallBack(Code, nSetCode, DataType, pHisDat, (short)datanum, time1, time2, nTQ, 0);
-	if ( 1 >= readnum || readnum > datanum )
+	if ( 1 > readnum || readnum > datanum )
 	{
 		std::ostringstream ss;
 		ss << "readnum = " << readnum << " datanum = " << datanum << " ";
@@ -238,14 +243,14 @@ bool pickUpInfo(char * Code, short nSetCode, short DataType, NTime time1, NTime 
 	}
 
 	float fYClose = pHisDat->Close;
+	LPHISDAT pEndHisDat = pHisDat + readnum - 1;	
+	NTime pStopDate = pEndHisDat->Time;
 
-	LPHISDAT pIndex = pHisDat + 1;
-	LPHISDAT pEndHisDat = pHisDat + readnum;
-
-	for (; pIndex < pEndHisDat; pIndex++)
+	for (LPHISDAT pIndex = pHisDat; pIndex <= pEndHisDat; pIndex++)
 	{
-		if (!fEqual(pIndex->Close, fYClose*1.1))
+		if (pIndex != pHisDat && !fEqual(pIndex->Close, fYClose*1.1))
 		{
+			pStopDate = pIndex->Time;
 			break;
 		}
 		fYClose = pIndex->Close;
@@ -262,12 +267,12 @@ bool pickUpInfo(char * Code, short nSetCode, short DataType, NTime time1, NTime 
 	STOCKINFO stockInfoArray[1];
 	memset(stockInfoArray, 0, sizeof(STOCKINFO));
 	g_pFuncCallBack(Code, nSetCode, STKINFO_DAT, stockInfoArray, 1, time1, time2, nTQ, 0);
-	
+	 
 	memcpy(stKey.Name, stockInfoArray[0].Name, 9);
 	stKey.startDate = pHisDat->Time;
 	stKey.publishPrice = pHisDat->Close / (float)1.44;
 	stKey.topPrice = fYClose;
-	stKey.endDate = pIndex->Time;
+	stKey.endDate = pStopDate;
 		
 	delete[] pHisDat;
 	pHisDat=NULL;
@@ -354,6 +359,9 @@ BOOL InputInfoThenCalc1(char * Code,short nSetCode,int Value[4],short DataType,s
 BOOL InputInfoThenCalc2(char * Code,short nSetCode,int Value[4],short DataType,NTime time1,NTime time2,BYTE nTQ,unsigned long unused)  //选取区段
 {
 	BOOL nRet = FALSE;
+
+	//在这里强制不复权，复权会得到错误的收盘价
+	nTQ = 0; 
 
 	{
 	std::ofstream ofs;
